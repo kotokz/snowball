@@ -1,0 +1,9 @@
+[package]
+name = "snowball"
+version = "0.1.0"
+authors = ["kotokz"]
+
+[dependencies]
+hyper = "*"
+cookie = "0.2"
+url = "*"
