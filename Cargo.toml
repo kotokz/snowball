@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["kotokz"]
 
 [dependencies]
+clippy = "*"
 hyper = "*"
 cookie = "0.2"
 url = "*"

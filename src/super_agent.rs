@@ -3,7 +3,7 @@ use hyper::client::IntoUrl;
 use hyper::header::{Cookie, SetCookie, Connection};
 use cookie::CookieJar;
 use std::io::Error as IoError;
-use url::ParseError;
+use url::{Url, ParseError};
 use hyper::Error as HttpError;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
@@ -12,12 +12,12 @@ use std::io::Read;
 pub struct SuperAgent<'a> {
     login_url: &'a str,
     client: Client,
-    cookiejar: CookieJar<'a>,
-    params: Option<Vec<(&'a str, &'a str)>>,
+    cookiejar: CookieJar<'a>, /* target: Option<Url>,
+                               * params: Option<Vec<(&'a str, &'a str)>>, */
 }
 
 impl<'a> SuperAgent<'a> {
-    pub fn new(url: &'a str) -> Result<SuperAgent<'a>, AgentError> {
+    pub fn new(url: &'a str) -> SuperAgent<'a> {
 
         let client = Client::new();
         let c = CookieJar::new(b"Super8SecretAgent_");
@@ -25,51 +25,47 @@ impl<'a> SuperAgent<'a> {
             login_url: url,
             client: client,
             cookiejar: c,
-            params: None,
         };
         agent.initial_cookie();
-        Ok(agent)
+        agent
     }
 
-    pub fn get<U: IntoUrl>(&mut self, url: U) -> Result<Response, AgentError> {
-        let mut link = try!(url.into_url().map_err(AgentError::UrlParseError));
-        if let Some(ref params) = self.params {
-            link.set_query_from_pairs(params.to_vec().into_iter());
+    pub fn get<U: IntoUrl>(&self, url: U) -> UrlBuilder {
+        // self.target = Some(try!(url.into_url().map_err(AgentError::UrlParseError)));
+        UrlBuilder {
+            agent: self,
+            url: url.into_url().ok(),
+            params: None,
         }
-
-        println!("{:?}", link);
-        let mut resp = try!(self.client
-                                .get(link)
-                                .header(Connection::close())
-                                .header(Cookie::from_cookie_jar(&self.cookiejar))
-                                .send()
-                                .map_err(AgentError::HttpRequestError));
-        let mut resp_body = String::new();
-
-        try!(resp.read_to_string(&mut resp_body).map_err(AgentError::HttpIoError));
-
-        let response = Response {
-            code: resp.status.to_u16(),
-            status: resp.status,
-            headers: resp.headers.clone(),
-            body: resp_body,
-        };
-
-        self.params = None;
-
-        return Ok(response);
     }
 
-    pub fn get_with_params(&mut self,
-                           url: &'a str,
-                           url_params: &[(&'a str, &'a str)])
-                           -> Result<Response, AgentError> {
-        self.params = Some(url_params.iter().cloned().collect());
-
-        return self.get(url);
+    pub fn get_with_params(&self, url: &'a str, url_params: &[(&'a str, &'a str)]) -> UrlBuilder {
+        UrlBuilder {
+            agent: self,
+            url: url.into_url().ok(),
+            params: Some(url_params.iter().cloned().collect()),
+        }
     }
+    pub fn initial_cookie(&mut self) {
+        match self.client
+                  .get(self.login_url)
+                  .header(Connection::close())
+                  .send() {
+            Ok(res) => {
+                res.headers.get::<SetCookie>().unwrap().apply_to_cookie_jar(&mut self.cookiejar);
+            }
+            Err(e) => println!("Unable get cookie, {:?}", e),
+        }
+    }
+}
 
-    pub fn add_param(mut self, key: &'a str, val: &'a str) -> SuperAgent<'a> {
+pub struct UrlBuilder<'a> {
+    agent: &'a SuperAgent<'a>,
+    url: Option<Url>,
+    params: Option<Vec<(&'a str, &'a str)>>,
+}
+impl<'a> UrlBuilder<'a> {
+    pub fn add_param(mut self, key: &'a str, val: &'a str) -> UrlBuilder<'a> {
         {
             let mut params = match self.params {
                 Some(ref mut p) => p,
@@ -83,16 +79,34 @@ impl<'a> SuperAgent<'a> {
         self
     }
 
-    pub fn initial_cookie(&mut self) {
-        match self.client
-                  .get(self.login_url)
-                  .header(Connection::close())
-                  .send() {
-            Ok(res) => {
-                res.headers.get::<SetCookie>().unwrap().apply_to_cookie_jar(&mut self.cookiejar);
-            }
-            Err(e) => println!("Unable get cookie, {:?}", e),
+    pub fn send(mut self) -> Result<Response, AgentError> {
+        let mut link = match self.url {
+            Some(ref mut r) => r,
+            None => return Err(AgentError::MissingUrl),
+        };
+
+        if let Some(ref params) = self.params {
+            link.set_query_from_pairs(params.to_vec().into_iter());
         }
+
+        println!("{:?}", link);
+        let mut resp = try!(self.agent
+                                .client
+                                .get(link.clone())
+                                .header(Connection::close())
+                                .header(Cookie::from_cookie_jar(&self.agent.cookiejar))
+                                .send()
+                                .map_err(AgentError::HttpRequestError));
+        let mut resp_body = String::new();
+
+        try!(resp.read_to_string(&mut resp_body).map_err(AgentError::HttpIoError));
+
+        Ok(Response {
+            code: resp.status.to_u16(),
+            status: resp.status,
+            headers: resp.headers.clone(),
+            body: resp_body,
+        })
     }
 }
 
@@ -115,6 +129,7 @@ pub enum AgentError {
     UrlParseError(ParseError),
     HttpRequestError(HttpError),
     HttpIoError(IoError),
+    MissingUrl,
 }
 
 #[cfg(test)]
@@ -123,13 +138,13 @@ mod tests {
     #[test]
     fn verify_get_with_params() {
 
-        let mut agent = SuperAgent::new("http://xueqiu.com").unwrap();
+        let mut agent = SuperAgent::new("http://xueqiu.com");
 
         let r = agent.get("http://xueqiu.com/statuses/topic.json?simple_user=1&topicType=5&page=1")
-                     .unwrap();
+                     .send();
         let r2 = agent.get_with_params("http://xueqiu.com/statuses/topic.json",
                                        &[("simple_user", "1"), ("topicType", "5"), ("page", "1")])
-                      .unwrap();
-        assert_eq!(r.body, r2.body);
+                      .send();
+        assert_eq!(r.unwrap().code, r2.unwrap().code);
     }
 }
