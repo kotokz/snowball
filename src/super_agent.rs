@@ -10,19 +10,18 @@ use std::fmt::Error as FmtError;
 use std::io::Read;
 
 pub struct SuperAgent<'a> {
-    login_url: &'a str,
+    login_url: Url,
     client: Client,
     cookiejar: CookieJar<'a>, /* target: Option<Url>,
                                * params: Option<Vec<(&'a str, &'a str)>>, */
 }
 
 impl<'a> SuperAgent<'a> {
-    pub fn new(url: &'a str) -> SuperAgent<'a> {
-
+    pub fn new<U: IntoUrl>(url: U) -> SuperAgent<'a> {
         let client = Client::new();
         let c = CookieJar::new(b"Super8SecretAgent_");
         let mut agent = SuperAgent {
-            login_url: url,
+            login_url: url.into_url().unwrap(),
             client: client,
             cookiejar: c,
         };
@@ -39,7 +38,10 @@ impl<'a> SuperAgent<'a> {
         }
     }
 
-    pub fn get_with_params(&self, url: &'a str, url_params: &[(&'a str, &'a str)]) -> UrlBuilder {
+    pub fn get_with_params<U: IntoUrl>(&self,
+                                       url: U,
+                                       url_params: &[(&'a str, &'a str)])
+                                       -> UrlBuilder {
         UrlBuilder {
             agent: self,
             url: url.into_url().ok(),
@@ -48,7 +50,7 @@ impl<'a> SuperAgent<'a> {
     }
     pub fn initial_cookie(&mut self) {
         match self.client
-                  .get(self.login_url)
+                  .get(self.login_url.clone())
                   .header(Connection::close())
                   .send() {
             Ok(res) => {
