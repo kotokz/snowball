@@ -135,16 +135,24 @@ pub enum AgentError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use types::Topic;
+
     #[test]
     fn verify_get_with_params() {
 
-        let mut agent = SuperAgent::new("http://xueqiu.com");
+        let agent = SuperAgent::new("http://xueqiu.com");
 
         let r = agent.get("http://xueqiu.com/statuses/topic.json?simple_user=1&topicType=5&page=1")
-                     .send();
+                     .send()
+                     .unwrap();
         let r2 = agent.get_with_params("http://xueqiu.com/statuses/topic.json",
                                        &[("simple_user", "1"), ("topicType", "5"), ("page", "1")])
-                      .send();
-        assert_eq!(r.unwrap().code, r2.unwrap().code);
+                      .send()
+                      .unwrap();
+        let map = ::serde_json::from_str::<Vec<Topic>>(&r.body).unwrap();
+        let map2 = ::serde_json::from_str::<Vec<Topic>>(&r2.body).unwrap();
+
+        assert_eq!(map[1].description, map2[1].description);
+        assert_eq!(map[1].user.screen_name, map2[1].user.screen_name);
     }
 }
