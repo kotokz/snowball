@@ -11,20 +11,21 @@ mod super_agent;
 mod urlmapper;
 
 use super_agent::SuperAgent;
-use types::Topic;
-use urlmapper::URLMapper;
+// use serde_json::Value;
+use types::{Topic, ShareHolderList};
+use urlmapper::URLMapper::{SnowballPage, NewsTopicJson, StockShareholdersJson};
 
 fn main() {
 
-    let agent = SuperAgent::new(URLMapper::SnowballPage.to_str());
-    let r = agent.get_with_params(URLMapper::NewsTopicJson,
+    let agent = SuperAgent::new(SnowballPage.to_str());
+    let r = agent.get_with_params(NewsTopicJson,
                                   &[("simple_user", "1"), ("topicType", "5"), ("page", "1")])
                  .send()
                  .unwrap();
 
     println!("{}", r.code);
 
-    let r = agent.get(URLMapper::NewsTopicJson)
+    let r = agent.get(NewsTopicJson)
                  .add_param("simple_user", "1")
                  .add_param("topicType", "5")
                  .add_param("page", "1")
@@ -45,4 +46,16 @@ fn main() {
     for v in map {
         println!("{}: {}", v.user.screen_name.unwrap(), v.description);
     }
+
+    let sh = agent.get(StockShareholdersJson)
+                  .add_param("symbol", "SZ300178")
+                  .add_param("page", "1")
+                  .add_param("size", "500")
+                  .send()
+                  .unwrap();
+
+    let sh_map: ShareHolderList = serde_json::from_str(&sh.body).unwrap();
+    println!("{}, {}",
+             sh_map.list[1].totalshamt.unwrap(),
+             sh_map.list[1].holdproportionpacc.unwrap());
 }
