@@ -16,7 +16,7 @@ use urlmapper::URLMapper;
 
 fn main() {
 
-    let agent = SuperAgent::new(URLMapper::SnowballPage);
+    let agent = SuperAgent::new(URLMapper::SnowballPage.to_str());
     let r = agent.get_with_params(URLMapper::NewsTopicJson,
                                   &[("simple_user", "1"), ("topicType", "5"), ("page", "1")])
                  .send()

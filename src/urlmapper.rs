@@ -10,23 +10,19 @@ pub enum URLMapper {
     StockSelectorJson,
 }
 
-impl ToString for URLMapper {
-    fn to_string(&self) -> String {
+impl URLMapper {
+    pub fn to_str(&self) -> &'static str {
         match *self {
-            URLMapper::SnowballPage => "http://xueqiu.com".to_owned(),
-            URLMapper::NewsTopicJson => "http://xueqiu.com/statuses/topic.json".to_owned(),
-            URLMapper::StockShareholdersJson => {
-                "http://xueqiu.com/stock/f10/shareholdernum.json".to_owned()
-            }
-            URLMapper::StockSelectorJson => {
-                "http://xueqiu.com/stock/screener/screen.json".to_owned()
-            }
+            URLMapper::SnowballPage => "http://xueqiu.com",
+            URLMapper::NewsTopicJson => "http://xueqiu.com/statuses/topic.json",
+            URLMapper::StockShareholdersJson => "http://xueqiu.com/stock/f10/shareholdernum.json",
+            URLMapper::StockSelectorJson => "http://xueqiu.com/stock/screener/screen.json",
         }
     }
 }
 
 impl IntoUrl for URLMapper {
     fn into_url(self) -> Result<Url, UrlError> {
-        self.to_string().into_url()
+        self.to_str().into_url()
     }
 }
